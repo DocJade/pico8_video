@@ -1,4 +1,5 @@
-// I like my clippy to be paranoid.
+// DocJade.
+
 #![warn(
     clippy::pedantic,
     clippy::nursery,
@@ -8,6 +9,17 @@
     clippy::style,
     clippy::perf
 )]
+
+// import the modules.
+mod image_actions;
+
+// I like my clippy to be paranoid.
+
+
+// TODO:
+//
+// Separate the video that was input into its frames (image_actions)
+// 
 
 const PICO_COLORS: [(&str, u8, u8, u8); 16] = [
     //ID,  R, G, B
