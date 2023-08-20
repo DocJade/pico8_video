@@ -1,3 +1,0 @@
-//DocJade.
-
-//todo: Add tests.
