@@ -1,7 +1,0 @@
-[package]
-name = "pico8_video"
-version = "0.1.0"
-edition = "2021"
-
-[dependencies]
-opencv = "0.84.5"
