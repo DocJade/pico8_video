@@ -8,6 +8,9 @@ import numpy as np
 #TODO rewrite these functions to be more generic.
 
 
+#TODO update functions to use arrays of colors instead of strings.
+
+
 def rle(input: str):
    # var setup
    current_run = -1
@@ -250,241 +253,99 @@ def xor_comp(full_video: str):
    with open("RLE_XOR_Output.txt", "w") as text_file:
       print(rle(output), file=text_file)
 
-# Quantize the image https://stackoverflow.com/questions/5906693/
-def kmeans_color_quantization(image, clusters=8, rounds=1):
-   h, w = image.shape[:2]
-   samples = np.zeros([h*w,3], dtype=np.float32)
-   count = 0
-   for x in range(h):
-      for y in range(w):
-         samples[count] = image[x][y]
-         count += 1
-   compactness, labels, centers = cv2.kmeans(samples,
-         clusters, 
-         None,
-         (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 10000, 0.0001), 
-         rounds, 
-         cv2.KMEANS_RANDOM_CENTERS)
-   centers = np.uint8(centers)
-   res = centers[labels.flatten()]
-   return res.reshape((image.shape))
+def quadtree_compression(frame: [int]):
+   #TODO!
+   #https://en.wikipedia.org/wiki/Quadtree
+   return "#TODO!"
 
-def color_comp():
-   # we are going to do all the video handling here, since
-   # this is so different from the rest of the b&w functions
+def change_compression(frame1: [int], frame2: [int]):
+   # frame 1 is the previous frame.
 
-   #load the video
+   # The format for the frames that are compared to previous frames works as follows:
+   # A number that indicates how far into the frame the changed pixel is.
+   # The new color of the pixel.
+   # Marker for end of frame.
+
+   # Example: 0:00>
+   # Change pixel `0` to color `00`, end of frame.
+
+   # If no changes are present, the entire frame will be expressed as `>`.
+   # Runs are not accounted for, every pixel gets its own entry.
+   # There is no need to store the beginning and end of pixels, since the size of the color
+   # is always 2 digits.
+
+   # Example: 234:10123:05>
+   # We take the entire string and split on :
+   # 234 10123 05>
+   # the first number in the frame is always an offset, so now we know to move
+   # `234` pixels forwards, so we move, then discard.
+   # 10123 05>
+   # now we need the color of the pixel we just shifted over to, so we "pop" the first
+   # 2 numbers in the next string
+   # "10" 123 05>
+   # we set the color of the pixel, then repeat.
+   # 123 05>
+   # 05>
+   # >
+   # When we hit the end of the frame, we will have 0 items left in the list, since
+   # the string provided to the function has already had the `>` removed.
+   # Example:
+   # 234:121:01>12:0132:15>
+   # 234:121:01 12:0132:15 "" # not sure if the final item will be empty, need to check.
+   # 234:121:01
+   # 234 121 01
+   # 121 01
+   # 1 01
+   # 01
+   # ""
+
+   # SPEC UPDATE:
+   # Now storing offsets from previous index.
+   # 123, 124 is now 123,1
+
+   # Now lets get to work!
+
+   # check that arrays are same length for sanity
+   if len(frame1) != len(frame2):
+      # Frames are not the same length!
+      raise "change_compression: Frames are not the same size!"
    
-   print("Loading video... ",end='')
-   SourceVideo = cv2.VideoCapture('OhMyGah_discord.mp4')
-   frame_count = int(SourceVideo.get(cv2.CAP_PROP_FRAME_COUNT))
-   count = 0
-   success = True
-   print("Done!")
-   
-   # now we will loop over each frame of the video, 
-   # resize the video to pico-8 size, then appending to
-   # the array with the color of each pixel value
+   # Now we shall compare each color, and add them to a new array that stores the changes.
+   # no change is stored as -1
+   changes = list(int)
 
-   print("Begin iterating frames...")
-   FrameColorArray = []
-   while count < frame_count:
-      print("Frame " + str(count) + "... ",end="")
+   for i in len(frame1):
+      if frame1[i] == frame2[i]:
+         # colors are the same, no change.
+         changes.append(-1)
+      else:
+         # Colors are different, store the new color.
+         changes.append(frame2[i])
 
-      # open the image from the frame
+   # Now that all the differences are stored, we can build the output string.
 
-      success,image = SourceVideo.read()
+   changeless_count = 0
+   output_string = ""
 
-      # up the saturation
+   for i in len(changes):
+      # check for a -1
+      if changes[i] == -1:
+         # no change, increment.
+         changeless_count += 1
+         continue
+      else:
+         # Change!
+         # append the change amount to the string
+         output_string += str(changeless_count)
+         # reset the count
+         changeless_count = 0
+         # Add the separator
+         output_string += ":"
+         # Then append the new color.
+         output_string += changes[i]
+         continue
 
-      image = cv2.cvtColor(image,cv2.COLOR_RGB2HSV)
+   # now we've worked through the whole frame, cap it and ship it!
+   output_string += ">"
 
-      #multiple by a factor to change the saturation
-      #https://answers.opencv.org/question/193336/
-
-      image[...,1] = image[...,1]*1.4
-
-      image=cv2.cvtColor(image,cv2.COLOR_HSV2RGB)
-
-      # denoise the image SLOW!
-      # image = cv2.fastNlMeansDenoisingColored(image,None,10,10,7,21)
-      # Quantize the image SLOW! # There are only 16 colors in the pico pallet, so no need to
-      # quantize for more than that.
-      # results in high flicker.
-      # image = kmeans_color_quantization(image, clusters=16,rounds=1)
-      # Bilateral Filtering # not too slow, still chroma noisy
-      image = cv2.bilateralFilter(image,18,800,800)
-      # Median color
-      # image = cv2.medianBlur(image,9)
-      # Gaussian blur
-      # image = cv2.GaussianBlur(image,(9,9),0)
-
-      # now resize the image. since this is
-      # anime / line art, use INTER_CUBIC.
-
-      image = cv2.resize(image, (128,96), interpolation = cv2.INTER_CUBIC)
-
-      # save image as bmp for QA
-
-      cv2.imwrite("output/frame%d.bmp" % count, image)
-
-      # loop over pixels
-
-      for i in range(96):
-        for j in range(128):
-            current_pixel = image[i,j] # this is an rgb value,
-            FrameColorArray.append(current_pixel) # put the color into the array
-      
-      # done looping over the pixels!
-      count += 1
-      print("Done!")
-
-   # done looping over frames!
-   print("Done iterating frames!")
-
-   # now we need to process the colors in the array to find the nearest pico-8 color 
-
-   PicoReadyColors = []
-   print("Finding closest colors.")
-   print("Please wait, This will take a while.")
-   for i in FrameColorArray:
-      PicoReadyColors += closest_color(i)
-
-   print("Done!")
-   print(len(PicoReadyColors))
-
-   # write the colors to file
-   with open("Pico_Colors.txt", "w") as text_file:
-    print(PicoReadyColors, file=text_file)
-
-   # now that we have the closest colors, we shall construct the initial frame of the video.
-   # we are going to dump the colors straight into a string, since the colors are padded to
-   # 2 digits, it will be easy to deconstruct later.
-
-   print("Building initial frame...")
-   InitialFrame = ""
-   for _ in range((128*96)):
-      InitialFrame += PicoReadyColors.pop(0)
-      InitialFrame += PicoReadyColors.pop(0)
-   
-   # now throw that string into RLE for better compression.
-   # Osaka's forehead has a lot of duplicate colors after all.
-
-   print("Running RLE...")
-   InitialFrame_RLE = string_rle(InitialFrame,2)
-
-   # now output the rle!
-   # Save the output to First_Frame
-   with open("First_Frame.txt", "w") as text_file:
-    print(InitialFrame_RLE, file=text_file)
-   print("Done!")
-
-   # now that the original frame is done, we can start comparing subsequent frames
-   # to find the differences.
-
-   CurrentFrame = InitialFrame
-   
-   # Loop to grab frames and compare until we run out of pixels.
-   FinalCompressed = ""
-
-   print("Starting change based compression!")
-
-   while len(PicoReadyColors) > 0:
-      # Still got a frame worth of pixels, lets get to work.
-
-      # The format for the frames that are compared to previous frames works as follows:
-      # A number that indicates how far into the frame the changed pixel is.
-      # The new color of the pixel.
-      # Marker for end of frame.
-
-      # Example: 0:00>
-      # Change pixel `0` to color `00`, end of frame.
-
-      # If no changes are present, the entire frame will be expressed as `>`.
-      # Runs are not accounted for, every pixel gets its own entry.
-      # There is no need to store the beginning and end of pixels, since the size of the color
-      # is always 2 digits.
-
-      # Example: 234:10123:05>
-      # We take the entire string and split on :
-      # 234 10123 05>
-      # the first number in the frame is always an offset, so now we know to move
-      # `234` pixels forwards, so we move, then discard.
-      # 10123 05>
-      # now we need the color of the pixel we just shifted over to, so we "pop" the first
-      # 2 numbers in the next string
-      # "10" 123 05>
-      # we set the color of the pixel, then repeat.
-      # 123 05>
-      # 05>
-      # >
-      # When we hit the end of the frame, we will have 0 items left in the list, since
-      # the string provided to the function has already had the `>` removed.
-      # Example:
-      # 234:121:01>12:0132:15>
-      # 234:121:01 12:0132:15 "" # not sure if the final item will be empty, need to check.
-      # 234:121:01
-      # 234 121 01
-      # 121 01
-      # 1 01
-      # 01
-      # ""
-
-      # SPEC UPDATE:
-      # Now storing offsets from previous index.
-      # 123, 124 is now 123,1
-
-      # Now lets get to work!
-      NextFrame = ""
-      CondensedFrame = ""
-      CurrentOffset = 0
-
-
-      # grab the next frame.
-      NextFrame = PicoReadyColors[:((128*96)*2)] # steal next frame
-      PicoReadyColors = PicoReadyColors[((128*96)*2):] # drop stolen frame
-
-      #for _ in range((128*96)):
-      #   NextFrame += PicoReadyColors.pop(0)
-      #   NextFrame += PicoReadyColors.pop(0)
-
-      # Now loop over both frames, storing the differences immediately into the final string.
-      
-      for i in range(0, (128*96)*2, 2):
-         # 0 is the top left pixel.
-         if (CurrentFrame[i] == NextFrame[i]) and (NextFrame[i+1] == CurrentFrame[i+1]): # 2 conditions for short circuiting.
-            # Same, Skip.
-            continue
-         else:
-            # New color! Store the i and color
-            print(".", end='') # print a dot for every hit.
-            # Since the array of colors in the frame are 2 digits per pixel, we need to half i.
-            CondensedFrame += str(int(i/2) - CurrentOffset)
-            CondensedFrame += ":"
-            CondensedFrame += str(NextFrame[i])
-            CondensedFrame += str(NextFrame[i+1]) # could probably use .. here.
-            CurrentOffset = int(i/2)
-            # cool! NEXT!
-            continue
-
-      # We've finished looping over every pixel.
-      # Now we will cap the frame, and add it to the final output.
-      # But first! if we only changed one pixel, we dont really care.
-      if CondensedFrame.count(":") == 1:
-         # only one change, discard.
-         CondensedFrame = ""
-         # print a bang to signify the discard'
-         print("!", end='')
-
-      print(">\n") # done with frame, cap the debug output.
-      FinalCompressed += CondensedFrame + ">"
-      # What's new is old.
-      CurrentFrame = NextFrame
-      # Next frame!
-      continue
-
-   # We've done every frame!
-   # Save the output to Gah_Changes
-   with open("Gah_Changes.txt", "w") as text_file:
-    print(FinalCompressed, file=text_file)
-   print("Done!")
+   return output_string
