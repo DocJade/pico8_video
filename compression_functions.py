@@ -230,6 +230,27 @@ def frame_compress(full_video: str):
       full += (str(i) + ",")
 #TODO finish this? idea is kinda killed bc of int>char>int>bin missing.
 
+def image_to_change_array(frame1: [int], frame2: [int]):
+   # check that arrays are same length for sanity
+   if len(frame1) != len(frame2):
+      # Frames are not the same length!
+      raise "image_to_change_array: Frames are not the same size!"
+
+   # Now we shall compare each color, and add them to a new array that stores the changes.
+   # no change is stored as -1
+   changes = list(int)
+
+   for i in len(frame1):
+      if frame1[i] == frame2[i]:
+         # colors are the same, no change.
+         changes.append(-1)
+      else:
+         # Colors are different, store the new color.
+         changes.append(frame2[i])
+   
+   # return the changes array.
+   return changes
+
 
 def xor_comp(full_video: str):
    bits_per_frame = (128*96)
@@ -305,22 +326,7 @@ def change_compression(frame1: [int], frame2: [int]):
 
    # Now lets get to work!
 
-   # check that arrays are same length for sanity
-   if len(frame1) != len(frame2):
-      # Frames are not the same length!
-      raise "change_compression: Frames are not the same size!"
-   
-   # Now we shall compare each color, and add them to a new array that stores the changes.
-   # no change is stored as -1
-   changes = list(int)
-
-   for i in len(frame1):
-      if frame1[i] == frame2[i]:
-         # colors are the same, no change.
-         changes.append(-1)
-      else:
-         # Colors are different, store the new color.
-         changes.append(frame2[i])
+   changes = image_to_change_array(frame1,frame2)
 
    # Now that all the differences are stored, we can build the output string.
 
